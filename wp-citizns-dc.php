@@ -14,6 +14,34 @@ defined( 'ABSPATH' ) or die( 'No script kiddies please!' );
 
 require_once 'vendor/autoload.php';
 
+$upload_dir = wp_upload_dir();
+$cache_dir = $upload_dir['basedir'].'/citiznsdc-cache';
+if ( ! file_exists( $cache_dir ) ) {
+    wp_mkdir_p( $cache_dir );
+}
+
+
+// Create default HandlerStack
+$stack = GuzzleHttp\HandlerStack::create();
+
+// Add this middleware to the top with `push`
+$stack->push(
+  new Kevinrob\GuzzleCache\CacheMiddleware(
+    new Kevinrob\GuzzleCache\Strategy\GreedyCacheStrategy(
+      new Kevinrob\GuzzleCache\Storage\DoctrineCacheStorage(
+        new Doctrine\Common\Cache\ChainCache(
+        	[
+        		new Doctrine\Common\Cache\ArrayCache(),
+        		new Doctrine\Common\Cache\FilesystemCache($cache_dir . '/')
+      		]
+      	)
+      ),
+      600
+    )
+  ), 
+  'cache'
+);
+
 
 add_shortcode( 'citiznsdc_candidates', 'citiznsdc_candidates_func' );
 function citiznsdc_candidates_func($atts) {
@@ -66,13 +94,16 @@ function citiznsdc_constituency_func($atts) {
 	return $message;
 }
 
+// Mapit guzzle client
+$mapit_client = new GuzzleHttp\Client([
+	'base_uri' => get_option( "citiznsdc_mapit_buri"),
+	'handler' => $stack,
+	'timeout' => 2.0
+]);
 
 function citiznsdc_postcode_to_wmc_codes($postcode) {
-	$client = new GuzzleHttp\Client(
-		['base_uri' => get_option( "citiznsdc_mapit_buri"), 'timeout' => 2.0]
-	);
-
-	$response = $client->get($postcode, [
+	global $mapit_client;
+	$response = $mapit_client->get($postcode, [
 		'headers' => [
 			'Accept' => 'application/json',
 			'X-Api-Key' => get_option( "citiznsdc_mapit_apik")
@@ -95,13 +126,16 @@ function citiznsdc_postcode_to_wmc_codes($postcode) {
 	}
 }
 
+// DC posts guzzle client
+$dcposts_client = new GuzzleHttp\Client([
+	'base_uri' => get_option("citiznsdc_posts_buri"),
+	'handler' => $stack,
+	'timeout' => 5.0
+]);
 
 function citiznsdc_fetch_candidates($wmc_gss) {
-	$client = new GuzzleHttp\Client(
-		['base_uri' => get_option("citiznsdc_posts_buri"), 'timeout' => 5.0]
-	);
-
-	$response = $client->get('WMC%3A' . $wmc_gss . '/', [
+	global $dcposts_client;
+	$response = $dcposts_client->get('WMC%3A' . $wmc_gss . '/', [
 		'headers' => [
 			'Accept' => 'application/json'
 		]
@@ -196,15 +230,19 @@ function citiznsdc_fetch_candidates($wmc_gss) {
 }
 
 
+// DC persons guzzle client
+$dcpersons_client = new GuzzleHttp\Client([
+	'base_uri' => get_option("citiznsdc_persons_buri"),
+	'handler' => $stack,
+	'timeout' => 5.0
+]);
+
 function citiznsdc_fetch_person($person_id) {
 	$results = array();
 
 	try {
-		$client = new GuzzleHttp\Client(
-			['base_uri' => get_option("citiznsdc_persons_buri"), 'timeout' => 5.0]
-		);
-
-		$response = $client->get($person_id . '/', [
+		global $dcpersons_client;
+		$response = $dcpersons_client->get($person_id . '/', [
 			'headers' => [
 				'Accept' => 'application/json'
 			]
@@ -258,16 +296,13 @@ function citiznsdc_fetch_person($person_id) {
 function citiznsdc_fetch_constituency($wmc_code) {
 	$last_election = "2015";
 
-	$client = new GuzzleHttp\Client(
-		['base_uri' => get_option("citiznsdc_posts_buri"), 'timeout' => 5.0]
-	);
-	
-	$response = $client->get($wmc_code . '/', [
+	global $dcposts_client;
+	$response = $dcposts_client->get($wmc_code . '/', [
 		'headers' => [
 			'Accept' => 'application/json'
 		]
 	]);
-
+	
 	$data = json_decode($response->getBody(), true);
 
 	$return = '<div class="media">';
@@ -346,7 +381,7 @@ function citiznsdc_store_query_metadata($area_id) {
 
 add_shortcode( 'citiznsdc_postcode_search', 'citiznsdc_postcode_search_func' );
 function citiznsdc_postcode_search_func($atts) {
-	$placeholder = (!empty($atts)) ? $atts : "Please enter a UK postcode";
+	$placeholder = (!empty($atts['placeholder'])) ? $atts['placeholder'] : "Please enter a UK postcode";
 
 	?>
 	<div class="row">
