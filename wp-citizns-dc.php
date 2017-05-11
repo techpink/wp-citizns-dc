@@ -3,7 +3,7 @@
 /**
 Plugin Name: WP Citizns Democracy Club
 Description: Access to the Democracy Club APIs
-Version: 0.1
+Version: 0.3
 Author: tchpnk
 Author URI: http://tchpnk.eu/
 License: GPLv2 or later
@@ -17,45 +17,67 @@ require_once 'vendor/autoload.php';
 
 add_shortcode( 'citiznsdc_candidates', 'citiznsdc_candidates_func' );
 function citiznsdc_candidates_func($atts) {
-	$postcode = $_GET['postcode'];
-	if (isset($postcode) and strlen($postcode) >= 6 and strlen($postcode) <= 8) {
+	$wmc_gss = $_GET['gss'];
+	if (isset($wmc_gss)) {
 		try {
-			//$wmc_code = citiznsdc_postcode_to_wmc_code($postcode);
-			$wmc_code = "E14000753"; // E14001019 = CV311NJ
-			
-			citiznsdc_store_query_metadata($wmc_code);
-
-			return citiznsdc_posts($wmc_code);
+			return citiznsdc_fetch_candidates($wmc_gss);
 		} catch (GuzzleHttp\Exception\ClientException $e) {
-			$message = "<div><p>No information could be found for postcode: ";
-			$message .= urldecode($postcode);
-			$message .= "</p></div>";
-			$message .= citiznsdc_postcode_search_func("Please enter a valid UK postcode");
-			
-			return $message;
+			// area id invalid/unrecognised
+			// fall through to default message
 		} catch (GuzzleHttp\Exception\RequestException $e) {
-			echo dump($e);
-			
-			$message = "<div><p>An unexpected error occurred. Please try again later.</p></div>";
+			// network/service error
+ 			$message = "<div><p>Service temporarily unavailable. Please try again later.</p></div>";
 			
 			return $message;
 		}
 	}
-
-	$message = "<div><p>No information could be found for postcode: ";
-	$message .= urldecode($postcode);
+	
+	// default message
+	$message = "<div><p>No information could be found for area: ";
+	$message .= urldecode($wmc_gss);
 	$message .= "</p></div>";
 			
-	return $message . citiznsdc_postcode_search_func("Please enter a valid UK postcode");
+	return $message;
 }
 
 
-function citiznsdc_postcode_to_wmc_code($postcode) {
+add_shortcode( 'citiznsdc_constituency', 'citiznsdc_constituency_func' );
+function citiznsdc_constituency_func($atts) {
+	$wmc_code = $_GET['wmc'];
+	if (isset($wmc_code)) {
+		try {
+			return citiznsdc_fetch_constituency($wmc_code);
+		} catch (GuzzleHttp\Exception\ClientException $e) {
+			// area id invalid/unrecognised
+			// fall through to default message
+		} catch (GuzzleHttp\Exception\RequestException $e) {
+			// network/service error
+			$message = "<div><p>Service temporarily unavailable. Please try again later.</p></div>";
+			
+			return $message;
+		}
+	}
+		
+	// default message
+	$message = "<div><p>No information could be found for area: ";
+	$message .= urldecode($wmc_code);
+	$message .= "</p></div>";
+			
+	return $message;
+}
+
+
+function citiznsdc_postcode_to_wmc_codes($postcode) {
 	$client = new GuzzleHttp\Client(
-		['base_uri' => get_option( "citiznsdc_pstc_buri"), 'timeout' => 2.0]
+		['base_uri' => get_option( "citiznsdc_mapit_buri"), 'timeout' => 2.0]
 	);
 
-	$response = $client->get($postcode);
+	$response = $client->get($postcode, [
+		'headers' => [
+			'Accept' => 'application/json',
+			'X-Api-Key' => get_option( "citiznsdc_mapit_apik")
+		]
+	]);
 
 	$data = json_decode($response->getBody(), true);
 
@@ -65,53 +87,239 @@ function citiznsdc_postcode_to_wmc_code($postcode) {
 
 		$area = $data['areas'][$wmc]['codes']['gss'];
 		if (isset($area)) {
-			return $area;
+			return array (
+				'wmc' => $wmc,
+				'gss' => $area
+				);
 		}
 	}
 }
 
 
-function citiznsdc_posts($wmc_code) {
+function citiznsdc_fetch_candidates($wmc_gss) {
 	$client = new GuzzleHttp\Client(
-		['base_uri' => get_option("citiznsdc_cand_buri"), 'timeout' => 5.0]
+		['base_uri' => get_option("citiznsdc_posts_buri"), 'timeout' => 5.0]
 	);
-	$response = $client->get('WMC%3A' . $wmc_code);
+
+	$response = $client->get('WMC%3A' . $wmc_gss . '/', [
+		'headers' => [
+			'Accept' => 'application/json'
+		]
+	]);
 
 	$data = json_decode($response->getBody(), true);
 
-	$candidates_locked = $data['candidates_locked'];
-	$area = $data['area'];
 	$election = $data['elections'][0];
 	$candidates = $data['memberships'];
 
-	$return = '<h3>';
-
-	$return .= ($candidates_locked) ? 'Confirmed' : 'Known';
-	$return .= ' candidates for ';
-
-	$return .= create_link($area['url'], $area['name']);
-
-	$return .= '</h3>';
-	//$return .= '<div class="colored-line-left"></div>';
-	//$return .= '<div class="clearfix"></div>';
+	$return = '<div class="media">';
+		$return .= '<div class="media-header theme-one-header">';
+			$return .= '<div class="media-heading">';
+				$return .= '<div class="fa fa-user"></div>';
+				$return .= 'Candidates for ' . $election['name'];
+			$return .= '</div>';
+		$return .= '</div>';
 	
+		$return .= '<div class="media-body">';
+
 	if (empty($candidates)) {
-		$return .= 'There are currently no declared candidates.';
+		$return = '<p>There are currently no declared candidates.</p>';
 	} else {
-		$return .= '<ul>';
-
 		foreach($candidates as $candidate) {
-			$url = 'https://whocanivotefor.co.uk/person/';
-			$url .= $candidate['person']['id'];
-			$url .= '/';
-			$url .= str_ireplace(' ', '-', strtolower($candidate['person']['name']));
-			
-			$link = create_link($url, $candidate['person']['name']);
-			$return .= "<li>{$link} - {$candidate['on_behalf_of']['name']}</li>";
+			$person = citiznsdc_fetch_person($candidate['person']['id']);
+
+			$return .= '<div class="col-xs-12 col-sm-12 col-md-12 candidate">';
+				$return .= '<div class="candidate-info outer-heading hidden">';
+					$return .= '<div class="disc theme-' . str_replace(':', '', $candidate['on_behalf_of']['id']) . '">';
+						$return .= '<div class="fa fa-bookmark"></div>';
+					$return .= '</div>';
+					$return .= '<h4 class="drop-inline">' . $candidate['person']['name'] . '</h4>';
+				$return .= '</div>';
+				$return .= '<div class="candidate-photo">';
+					if (isset($person['image'])) {
+						$return .= '<img src="' . $person['image'] . '" class="img-rounded">';
+					}
+				$return .= '</div>';
+				$return .= '<div class="candidate-info">';
+					$return .= '<div class="inner-heading">';
+						$return .= '<div class="disc theme-' . str_replace(':', '', $candidate['on_behalf_of']['id']) . '">';
+							$return .= '<div class="fa fa-bookmark"></div>';
+						$return .= '</div>';
+						$return .= '<h4 class="drop-inline">' . $candidate['person']['name'] . '</h4>';
+						//$return .= '<div class="colored-line-left"></div>';
+					$return .= '</div>';
+					$return .= '<div class="candidate-party text-lock">';
+						$return .= '<div>' . $candidate['on_behalf_of']['name'] . '</div> ';
+					$return .= '</div>';
+					$return .= '<div class="candidate-social">';
+						if (isset($person['email'])) {
+							$return .= '<a href="mailto:' . $person['email'] . '" target="_blank">';
+								$return .= '<div class="fa fa-envelope"></div>';
+							$return .= '</a>';
+						}
+						
+						if (isset($person['twitter'])) {
+							$return .= '<a href="' . $person['twitter'] . '" target="_blank">';
+								$return .= '<div class="fa fa-twitter"></div>';
+							$return .= '</a>';
+						}
+		
+						if (isset($person['facebook'])) {
+							$return .= '<a href="' . $person['facebook'] . '" target="_blank">';
+								$return .= '<div class="fa fa-facebook"></div>';
+							$return .= '</a>';
+						}
+
+						if (isset($person['linkedin'])) {
+							$return .= '<a href="' . $person['linkedin'] . '" target="_blank">';
+								$return .= '<div class="fa fa-linkedin-square"></div>';
+							$return .= '</a>';
+						}
+
+						if (isset($person['homepage'])) {
+							$return .= '<a href="' . $person['homepage'] . '" target="_blank">';
+								$return .= '<div class="fa fa-globe"></div>';
+							$return .= '</a>';
+						}
+						
+					$return .= '</div>';
+				$return .= '</div>';
+			$return .= '</div>';
+
 		}
-	
-		$return .= '</ul>';
 	}
+		$return .= '</div>';
+	$return .= '</div>';
+
+
+	return $return;
+}
+
+
+function citiznsdc_fetch_person($person_id) {
+	$results = array();
+
+	try {
+		$client = new GuzzleHttp\Client(
+			['base_uri' => get_option("citiznsdc_persons_buri"), 'timeout' => 5.0]
+		);
+
+		$response = $client->get($person_id . '/', [
+			'headers' => [
+				'Accept' => 'application/json'
+			]
+		]);
+
+		$data = json_decode($response->getBody(), true);
+
+		if (isset($data['thumbnail'])) {	
+			$results['image'] = $data['thumbnail'];
+		} else {
+			if ($data['gender'] == "male") {
+				$results['image'] = WP_PLUGIN_URL . "/wp-citizns-dc/images/genericM.jpg";
+			} else {
+				$results['image'] = WP_PLUGIN_URL . "/wp-citizns-dc/images/genericW.jpg";
+			}
+		}
+
+		if (isset($data['email']) and strpos($data['email'], "@")) {
+				$results['email'] = $data['email'];
+		}
+
+		foreach ($data['contact_details'] as $contact_detail) {
+			if ($contact_detail['contact_type'] == "twitter") {
+				$results['twitter'] = "https://twitter.com/" . $contact_detail['value'];
+			}
+		}
+
+		foreach ($data['links'] as $link) {
+			if (stristr($link['note'], "facebook") != false) {
+				$results['facebook'] = $link['url'];
+			} else if ($link['note'] == "homepage") {
+				$results['homepage'] = $link['url'];
+			} else if ($link['note'] == "linkedin") {
+				$results['linkedin'] = $link['url'];
+			}
+		}
+	} catch (GuzzleHttp\Exception\ClientException $e) {
+		// person id is invalid/unrecognised
+		// fall through to default message
+		//echo dump($e);
+	} catch (GuzzleHttp\Exception\RequestException $e) {
+		// network/service error
+		// fall through to default message
+		//echo dump($e);
+	}
+	
+	return $results;
+}
+
+
+function citiznsdc_fetch_constituency($wmc_code) {
+	$last_election = "2015";
+
+	$client = new GuzzleHttp\Client(
+		['base_uri' => get_option("citiznsdc_posts_buri"), 'timeout' => 5.0]
+	);
+	
+	$response = $client->get($wmc_code . '/', [
+		'headers' => [
+			'Accept' => 'application/json'
+		]
+	]);
+
+	$data = json_decode($response->getBody(), true);
+
+	$return = '<div class="media">';
+	$return .= '<div class="media-header theme-one-header">';
+	$return .= '<div class="media-heading">';
+	$return .= '<div class="fa fa-map-marker"></div>';
+	$return .= $data['area']['name'];
+	$return .= '</div>';
+	$return .= '</div>';
+	
+	$return .= '<div class="media-body">';
+
+	$elections = $data['elections'];
+	if (empty($elections)) {
+		$return .= 'There is no data available.';
+	} else {
+		foreach($elections as $election) {
+			if ($election['id'] == $last_election) {
+				$return .= '<h4>' . $election['name'] . ' Results</h4>';
+			}
+		}
+		
+		$candidates = $data['memberships'];
+		foreach($candidates as $candidate) {
+			if ($candidate['election']['id'] == $last_election and $candidate['elected']) {
+				$return .= '<table class="table">';
+				$return .= '<tbody>';
+				$return .= '<tr>';
+				$return .= '<td class="text-center drop-td">';
+				$return .= '<div class="fa fa-trophy"></div>';
+				$return .= '</td>';
+				$return .= '<th class="nowrap">Winner</th>';
+				$return .= '<td>' . $candidate['on_behalf_of']['name'] . '</td>';
+				$return .= '</tr>';
+				$return .= '<tr>';
+				$return .= '<td class="text-center drop-td">';
+				$return .= '<div class="fa fa-user"></div>';
+				$return .= '</td>';
+				$return .= '<th class="nowrap">MP</th>';
+				$return .= '<td>' . $candidate['person']['name'] . '</td>';
+				$return .= '</tr>';
+				$return .= '</tbody>';
+				$return .= '</table>';
+			}
+		}
+	}
+	
+	// media-body
+	$return .= '</div>';
+	
+	// media
+	$return .= '</div>';
 
 	return $return;
 }
@@ -138,19 +346,33 @@ function citiznsdc_store_query_metadata($area_id) {
 
 add_shortcode( 'citiznsdc_postcode_search', 'citiznsdc_postcode_search_func' );
 function citiznsdc_postcode_search_func($atts) {
-   $placeholder = (!empty($atts)) ? $atts :"Please enter a UK postcode";
-	
-	echo "<form class='search-form' action='".get_admin_url()."admin-post.php' method='post'>";
+	$placeholder = (!empty($atts)) ? $atts : "Please enter a UK postcode";
 
-		echo "<input type='hidden' name='action' value='citiznsdc-postcode-form' />";
-
-		echo "<p>";
-		echo "<input class='form-control' type='text' required name='citiznsdc_postcode' placeholder='" . $placeholder . "'/>";
-		echo "</p>";
-
-		echo "<input class='button button-primary' type='submit' value='FIND' />";
-
-	echo "</form>";
+	?>
+	<div class="row">
+		<div class="col-md-6">								
+			<!-- FORM  -->
+			<?php
+			echo '<form class="search-form" name="citiznsdc-postcode-form" action="'. get_admin_url() .'admin-post.php" method="post">';
+			?>
+				<input type="hidden" name="action" value="citiznsdc-postcode-form" />
+				<div class="input-group">
+					<?php
+					echo '<input class="form-control" type="text" required name="citiznsdc_postcode" placeholder="' . strip_tags( trim( $placeholder ) ) . '"/>';
+					?>
+					<span class="input-group-btn">
+						<button class="btn btn-primary" onclick="document.getElementById('citiznsdc-postcode-form').submit();">
+							<span class="screen-reader-text">FIND</span>
+							FIND
+						</button>
+					</span>
+				</div>							
+			</form>							
+			<!-- /END FORM -->
+		</div>
+		<div class="col-md-6">&nbsp;</div>
+	</div>
+	<?php
 }
 
 
@@ -171,14 +393,34 @@ add_action('admin_post_citiznsdc-postcode-form', 'citiznsdc_handle_form_action')
 // If the user in not logged in
 add_action('admin_post_nopriv_citiznsdc-postcode-form', 'citiznsdc_handle_form_action');
 function citiznsdc_handle_form_action(){
+	// default redirect URL - postcode not recognised page
+	$url = esc_url(home_url( '/' . "postcode-not-recognised" . '/' ));
+	
 	$postcode = (!empty($_POST["citiznsdc_postcode"])) ? $_POST["citiznsdc_postcode"] : NULL;
-	
-	// remove any whitespace
-	//$postcode = preg_replace('/\s/', '', $postcode);
-	$postcode = urlencode(trim($postcode));
-	
-	$url = esc_url(add_query_arg("postcode", $postcode,
-		home_url( '/' . get_option("citiznsdc_cand_slug") . '/' )));
+	$postcode = trim($postcode);
+	if (isset($postcode) and strlen($postcode) >= 6 and strlen($postcode) <= 8) {
+		$postcode = urlencode($postcode);
+		
+		try {
+			$wmc_codes = citiznsdc_postcode_to_wmc_codes($postcode);
+			/*
+			$wmc_codes = array (
+				'wmc' => '65608', // 65717 - Horsham, 66020 - Lewes
+				'gss' => 'E14001019' // E14000753 - Horsham, Lewes - E14000786
+				);
+			*/
+
+			citiznsdc_store_query_metadata($wmc_codes['wmc']);
+
+			$url = add_query_arg($wmc_codes, home_url( '/' . get_option("citiznsdc_cand_slug") . '/' ));
+		} catch (GuzzleHttp\Exception\ClientException $e) {
+			// postcode invalid/unrecognised
+			// fall through, $url already set
+		} catch (GuzzleHttp\Exception\RequestException $e) {
+			// network/service error
+			$url = esc_url(home_url( '/' . "service-unavailable" . '/' ));			
+		}
+	}
 	
 	wp_redirect($url);
 	exit;
@@ -218,16 +460,24 @@ function citiznsdc_plugin_options() {
 
 		<input type="hidden" name="action" value="update_citiznsdc_settings" />
 
-		<h3>MapIt API Info</h3>
+		<h3>MapIt API</h3>
 		<p>
 		<label>Postcode API Base URI</label>
-		<input class="" type="text" size="45" name="citiznsdc_pstc_buri" value="<?php echo get_option('citiznsdc_pstc_buri'); ?>" />
+		<input class="" type="text" size="60" name="citiznsdc_mapit_buri" value="<?php echo get_option('citiznsdc_mapit_buri'); ?>" />
+		</p>
+		<p>
+		<label>Postcode API Key</label>
+		<input class="" type="text" size="45" name="citiznsdc_mapit_apik" value="<?php echo get_option('citiznsdc_mapit_apik'); ?>" />
 		</p>
 
 		<h3>Democracy Club API Info</h3>
 		<p>
-		<label>Candidates API Base URI</label>
-		<input class="" type="text" size="45" name="citiznsdc_cand_buri" value="<?php echo get_option('citiznsdc_cand_buri'); ?>" />
+		<label>Posts API Base URI</label>
+		<input class="" type="text" size="60" name="citiznsdc_posts_buri" value="<?php echo get_option('citiznsdc_posts_buri'); ?>" />
+		</p>
+		<p>
+		<label>Persons API Base URI</label>
+		<input class="" type="text" size="60" name="citiznsdc_persons_buri" value="<?php echo get_option('citiznsdc_persons_buri'); ?>" />
 		</p>
 
 		<h3>Candidates Page Info</h3>
@@ -248,15 +498,19 @@ add_action( 'admin_post_update_citiznsdc_settings', 'citiznsdc_handle_save' );
 function citiznsdc_handle_save() {
 
    // Get the options that were sent
-   $pstc_buri = (!empty($_POST["citiznsdc_pstc_buri"])) ? $_POST["citiznsdc_pstc_buri"] : NULL;
-   $cand_buri = (!empty($_POST["citiznsdc_cand_buri"])) ? $_POST["citiznsdc_cand_buri"] : NULL;
+   $mapit_buri = (!empty($_POST["citiznsdc_mapit_buri"])) ? $_POST["citiznsdc_mapit_buri"] : NULL;
+   $mapit_apik = (!empty($_POST["citiznsdc_mapit_apik"])) ? $_POST["citiznsdc_mapit_apik"] : NULL;
+   $posts_buri = (!empty($_POST["citiznsdc_posts_buri"])) ? $_POST["citiznsdc_posts_buri"] : NULL;
+   $persons_buri = (!empty($_POST["citiznsdc_persons_buri"])) ? $_POST["citiznsdc_persons_buri"] : NULL;
    $cand_slug = (!empty($_POST["citiznsdc_cand_slug"])) ? $_POST["citiznsdc_cand_slug"] : NULL;
 
    // Validation would go here
 
    // Update the values
-   update_option( "citiznsdc_pstc_buri", $pstc_buri, TRUE );
-   update_option("citiznsdc_cand_buri", $cand_buri, TRUE);
+   update_option( "citiznsdc_mapit_buri", $mapit_buri, TRUE );
+   update_option( "citiznsdc_mapit_apik", $mapit_apik, TRUE );
+   update_option("citiznsdc_posts_buri", $posts_buri, TRUE);
+   update_option("citiznsdc_persons_buri", $persons_buri, TRUE);
    update_option("citiznsdc_cand_slug", $cand_slug, TRUE);
 
    // Redirect back to settings page
@@ -270,6 +524,7 @@ function citiznsdc_handle_save() {
 
 global $citiznsdc_db_version;
 $citiznsdc_db_version = '1.0';
+
 
 register_activation_hook( __FILE__, 'citiznsdc_install' );
 function citiznsdc_install() {
