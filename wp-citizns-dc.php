@@ -3,7 +3,7 @@
 /**
 Plugin Name: WP Citizns Democracy Club
 Description: Access to the Democracy Club APIs
-Version: 0.3
+Version: 0.4
 Author: tchpnk
 Author URI: http://tchpnk.eu/
 License: GPLv2 or later
