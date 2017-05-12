@@ -36,19 +36,51 @@ $stack->push(
       		]
       	)
       ),
-      600
+      3600
     )
   ), 
   'cache'
 );
 
+// Mapit guzzle client
+$default_mapit_buri = "https://mapit.mysociety.org/postcode/";
+$mapit_buri = (!get_option( "citiznsdc_mapit_buri")) ? $default_mapit_buri : get_option( "citiznsdc_mapit_buri");
+$mapit_client = new GuzzleHttp\Client([
+	'base_uri' => $mapit_buri,
+	'handler' => $stack,
+	'timeout' => 2.0
+]);
+
+// DC posts guzzle client
+$default_posts_buri = "http://candidates.democracyclub.org.uk/api/v0.9/posts/";
+$dcposts_buri = (!get_option( "citiznsdc_posts_buri")) ? $default_posts_buri : get_option("citiznsdc_posts_buri");
+$dcposts_client = new GuzzleHttp\Client([
+	'base_uri' => $dcposts_buri,
+	'handler' => $stack,
+	'timeout' => 5.0
+]);
+
+// DC persons guzzle client
+$default_persons_buri = "http://candidates.democracyclub.org.uk/api/v0.9/persons/";
+$dcpersons_buri = (!get_option("citiznsdc_persons_buri")) ? $default_persons_buri : get_option("citiznsdc_persons_buri");
+$dcpersons_client = new GuzzleHttp\Client([
+	'base_uri' => $dcpersons_buri,
+	'handler' => $stack,
+	'timeout' => 5.0
+]);
+
 
 add_shortcode( 'citiznsdc_candidates', 'citiznsdc_candidates_func' );
 function citiznsdc_candidates_func($atts) {
-	$wmc_gss = $_GET['gss'];
-	if (isset($wmc_gss)) {
+	$gss = $_GET['gss'];
+	if (!isset($gss)) {
+		global $wp_query;
+		$gss = $wp_query->query_vars['gss'];
+	}
+
+	if (isset($gss)) {
 		try {
-			return citiznsdc_fetch_candidates($wmc_gss);
+			return citiznsdc_fetch_candidates($gss);
 		} catch (GuzzleHttp\Exception\ClientException $e) {
 			// area id invalid/unrecognised
 			// fall through to default message
@@ -62,7 +94,7 @@ function citiznsdc_candidates_func($atts) {
 	
 	// default message
 	$message = "<div><p>No information could be found for area: ";
-	$message .= urldecode($wmc_gss);
+	$message .= urldecode($gss);
 	$message .= "</p></div>";
 			
 	return $message;
@@ -71,10 +103,15 @@ function citiznsdc_candidates_func($atts) {
 
 add_shortcode( 'citiznsdc_constituency', 'citiznsdc_constituency_func' );
 function citiznsdc_constituency_func($atts) {
-	$wmc_code = $_GET['wmc'];
-	if (isset($wmc_code)) {
+	$wmc = $_GET['wmc'];
+	if (!isset($wmc)) {
+		global $wp_query;
+		$wmc = $wp_query->query_vars['wmc'];
+	}
+
+	if (isset($wmc)) {
 		try {
-			return citiznsdc_fetch_constituency($wmc_code);
+			return citiznsdc_fetch_constituency($wmc);
 		} catch (GuzzleHttp\Exception\ClientException $e) {
 			// area id invalid/unrecognised
 			// fall through to default message
@@ -88,18 +125,11 @@ function citiznsdc_constituency_func($atts) {
 		
 	// default message
 	$message = "<div><p>No information could be found for area: ";
-	$message .= urldecode($wmc_code);
+	$message .= urldecode($wmc);
 	$message .= "</p></div>";
 			
 	return $message;
 }
-
-// Mapit guzzle client
-$mapit_client = new GuzzleHttp\Client([
-	'base_uri' => get_option( "citiznsdc_mapit_buri"),
-	'handler' => $stack,
-	'timeout' => 2.0
-]);
 
 function citiznsdc_postcode_to_wmc_codes($postcode) {
 	global $mapit_client;
@@ -125,13 +155,6 @@ function citiznsdc_postcode_to_wmc_codes($postcode) {
 		}
 	}
 }
-
-// DC posts guzzle client
-$dcposts_client = new GuzzleHttp\Client([
-	'base_uri' => get_option("citiznsdc_posts_buri"),
-	'handler' => $stack,
-	'timeout' => 5.0
-]);
 
 function citiznsdc_fetch_candidates($wmc_gss) {
 	global $dcposts_client;
@@ -225,17 +248,9 @@ function citiznsdc_fetch_candidates($wmc_gss) {
 		$return .= '</div>';
 	$return .= '</div>';
 
-
 	return $return;
 }
 
-
-// DC persons guzzle client
-$dcpersons_client = new GuzzleHttp\Client([
-	'base_uri' => get_option("citiznsdc_persons_buri"),
-	'handler' => $stack,
-	'timeout' => 5.0
-]);
 
 function citiznsdc_fetch_person($person_id) {
 	$results = array();
@@ -438,16 +453,10 @@ function citiznsdc_handle_form_action(){
 		
 		try {
 			$wmc_codes = citiznsdc_postcode_to_wmc_codes($postcode);
-			/*
-			$wmc_codes = array (
-				'wmc' => '65608', // 65717 - Horsham, 66020 - Lewes
-				'gss' => 'E14001019' // E14000753 - Horsham, Lewes - E14000786
-				);
-			*/
 
 			citiznsdc_store_query_metadata($wmc_codes['wmc']);
 
-			$url = add_query_arg($wmc_codes, home_url( '/' . get_option("citiznsdc_cand_slug") . '/' ));
+			$url = esc_url(home_url( '/wmc/' . $wmc_codes['wmc'] . '/gss/' . $wmc_codes['gss'] . '/'));
 		} catch (GuzzleHttp\Exception\ClientException $e) {
 			// postcode invalid/unrecognised
 			// fall through, $url already set
@@ -531,29 +540,28 @@ function citiznsdc_plugin_options() {
 
 add_action( 'admin_post_update_citiznsdc_settings', 'citiznsdc_handle_save' );
 function citiznsdc_handle_save() {
+	// Get the options that were sent
+	$mapit_buri = (!empty($_POST["citiznsdc_mapit_buri"])) ? $_POST["citiznsdc_mapit_buri"] : NULL;
+	$mapit_apik = (!empty($_POST["citiznsdc_mapit_apik"])) ? $_POST["citiznsdc_mapit_apik"] : NULL;
+   	$posts_buri = (!empty($_POST["citiznsdc_posts_buri"])) ? $_POST["citiznsdc_posts_buri"] : NULL;
+   	$persons_buri = (!empty($_POST["citiznsdc_persons_buri"])) ? $_POST["citiznsdc_persons_buri"] : NULL;
+   	$cand_slug = (!empty($_POST["citiznsdc_cand_slug"])) ? $_POST["citiznsdc_cand_slug"] : NULL;
 
-   // Get the options that were sent
-   $mapit_buri = (!empty($_POST["citiznsdc_mapit_buri"])) ? $_POST["citiznsdc_mapit_buri"] : NULL;
-   $mapit_apik = (!empty($_POST["citiznsdc_mapit_apik"])) ? $_POST["citiznsdc_mapit_apik"] : NULL;
-   $posts_buri = (!empty($_POST["citiznsdc_posts_buri"])) ? $_POST["citiznsdc_posts_buri"] : NULL;
-   $persons_buri = (!empty($_POST["citiznsdc_persons_buri"])) ? $_POST["citiznsdc_persons_buri"] : NULL;
-   $cand_slug = (!empty($_POST["citiznsdc_cand_slug"])) ? $_POST["citiznsdc_cand_slug"] : NULL;
+   	// TODO validation should go here
 
-   // Validation would go here
+   	// Update the values
+   	update_option("citiznsdc_mapit_buri", $mapit_buri, TRUE);
+	update_option("citiznsdc_mapit_apik", $mapit_apik, TRUE);
+	update_option("citiznsdc_posts_buri", $posts_buri, TRUE);
+	update_option("citiznsdc_persons_buri", $persons_buri, TRUE);
+	update_option("citiznsdc_cand_slug", $cand_slug, TRUE);
 
-   // Update the values
-   update_option( "citiznsdc_mapit_buri", $mapit_buri, TRUE );
-   update_option( "citiznsdc_mapit_apik", $mapit_apik, TRUE );
-   update_option("citiznsdc_posts_buri", $posts_buri, TRUE);
-   update_option("citiznsdc_persons_buri", $persons_buri, TRUE);
-   update_option("citiznsdc_cand_slug", $cand_slug, TRUE);
-
-   // Redirect back to settings page
-   // The ?page=citiznsdc corresponds to the "slug" 
-   // set in the fourth parameter of add_submenu_page() above.
-   $redirect_url = get_bloginfo("url") . "/wp-admin/options-general.php?page=citiznsdc&status=success";
-   header("Location: ".$redirect_url);
-   exit;
+	// Redirect back to settings page
+	// The ?page=citiznsdc corresponds to the "slug" 
+	// set in the fourth parameter of add_submenu_page() above.
+   	$redirect_url = get_bloginfo("url") . "/wp-admin/options-general.php?page=citiznsdc&status=success";
+   	header("Location: ".$redirect_url);
+   	exit;
 }
 
 
@@ -563,6 +571,7 @@ $citiznsdc_db_version = '1.0';
 
 register_activation_hook( __FILE__, 'citiznsdc_install' );
 function citiznsdc_install() {
+	// create citiznsdc_requests db table
 	global $wpdb;
 	global $citiznsdc_db_version;
 
@@ -582,5 +591,35 @@ function citiznsdc_install() {
 	dbDelta( $sql );
 
 	add_option( 'citiznsdc_db_version', $citiznsdc_db_version );
+
+	// default API base URIs
+	global $default_mapit_buri;
+   	add_option( 'citiznsdc_mapit_buri', $default_mapit_buri );
+   	
+   	global $default_posts_buri;
+   	add_option( 'citiznsdc_posts_buri', $default_posts_buri );
+   	
+   	global $default_persons_buri;
+   	add_option( 'citiznsdc_persons_buri', $default_persons_buri );
 }
 
+
+function add_rewrite_rules( $wp_rewrite ) {
+	$new_rules = array(
+		'wmc/?([0-9]{5})/gss/?([A-Z][0-9]{8})/?$' => 'index.php?pagename=' .
+		get_option("citiznsdc_cand_slug") . '&wmc=$matches[1]&gss=$matches[2]'
+	);
+	
+	// Add the rules to the top, to make sure they have priority
+	$wp_rewrite -> rules = $new_rules + $wp_rewrite -> rules;
+}
+add_action('generate_rewrite_rules', 'add_rewrite_rules');
+
+
+function add_query_vars( $public_query_vars ) {
+	$public_query_vars[] = "wmc";
+	$public_query_vars[] = "gss";
+ 
+	return $public_query_vars;
+}
+add_filter('query_vars', 'add_query_vars');
