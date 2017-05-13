@@ -3,7 +3,7 @@
 /**
 Plugin Name: WP Citizns Democracy Club
 Description: Access to the Democracy Club APIs
-Version: 0.4
+Version: 0.4.1
 Author: tchpnk
 Author URI: http://tchpnk.eu/
 License: GPLv2 or later
@@ -13,6 +13,9 @@ Text Domain: citiznsdc
 defined( 'ABSPATH' ) or die( 'No script kiddies please!' );
 
 require_once 'vendor/autoload.php';
+
+$by_election_table_name = 'citiznsdc_by_elections';
+
 
 $upload_dir = wp_upload_dir();
 $cache_dir = $upload_dir['basedir'].'/citiznsdc-cache';
@@ -183,66 +186,66 @@ function citiznsdc_fetch_candidates($wmc_gss) {
 		$return = '<p>There are currently no declared candidates.</p>';
 	} else {
 		foreach($candidates as $candidate) {
-			$person = citiznsdc_fetch_person($candidate['person']['id']);
+			if ($candidate['election']['id'] == 'parl.2017-06-08') {
+				$person = citiznsdc_fetch_person($candidate['person']['id']);
 
-			$return .= '<div class="col-xs-12 col-sm-12 col-md-12 candidate">';
-				$return .= '<div class="candidate-info outer-heading hidden">';
-					$return .= '<div class="disc theme-' . str_replace(':', '', $candidate['on_behalf_of']['id']) . '">';
-						$return .= '<div class="fa fa-bookmark"></div>';
-					$return .= '</div>';
-					$return .= '<h4 class="drop-inline">' . $candidate['person']['name'] . '</h4>';
-				$return .= '</div>';
-				$return .= '<div class="candidate-photo">';
-					if (isset($person['image'])) {
-						$return .= '<img src="' . $person['image'] . '" class="img-rounded">';
-					}
-				$return .= '</div>';
-				$return .= '<div class="candidate-info">';
-					$return .= '<div class="inner-heading">';
-						$return .= '<div class="disc theme-' . str_replace(':', '', $candidate['on_behalf_of']['id']) . '">';
+				$return .= '<div class="col-xs-12 col-sm-12 col-md-12 candidate">';
+					$return .= '<div class="candidate-info outer-heading hidden">';
+						$return .= '<div class="rosette theme-' . str_replace(':', '', $candidate['on_behalf_of']['id']) . '">';
 							$return .= '<div class="fa fa-bookmark"></div>';
 						$return .= '</div>';
 						$return .= '<h4 class="drop-inline">' . $candidate['person']['name'] . '</h4>';
-						//$return .= '<div class="colored-line-left"></div>';
 					$return .= '</div>';
-					$return .= '<div class="candidate-party text-lock">';
-						$return .= '<div>' . $candidate['on_behalf_of']['name'] . '</div> ';
-					$return .= '</div>';
-					$return .= '<div class="candidate-social">';
-						if (isset($person['email'])) {
-							$return .= '<a href="mailto:' . $person['email'] . '" target="_blank">';
-								$return .= '<div class="fa fa-envelope"></div>';
-							$return .= '</a>';
+					$return .= '<div class="candidate-photo">';
+						if (isset($person['image'])) {
+							$return .= '<img src="' . $person['image'] . '" class="img-rounded">';
 						}
+					$return .= '</div>';
+					$return .= '<div class="candidate-info">';
+						$return .= '<div class="inner-heading">';
+							$return .= '<div class="rosette theme-dc-' . str_replace(':', '', $candidate['on_behalf_of']['id']) . '">';
+								$return .= '<div class="fa fa-bookmark"></div>';
+							$return .= '</div>';
+							$return .= '<h4 class="drop-inline">' . $candidate['person']['name'] . '</h4>';
+						$return .= '</div>';
+						$return .= '<div class="candidate-party text-lock">';
+							$return .= '<div>' . $candidate['on_behalf_of']['name'] . '</div> ';
+						$return .= '</div>';
+						$return .= '<div class="candidate-social">';
+							if (isset($person['email'])) {
+								$return .= '<a href="mailto:' . $person['email'] . '" target="_blank">';
+									$return .= '<div class="fa fa-envelope"></div>';
+								$return .= '</a>';
+							}
 						
-						if (isset($person['twitter'])) {
-							$return .= '<a href="' . $person['twitter'] . '" target="_blank">';
-								$return .= '<div class="fa fa-twitter"></div>';
-							$return .= '</a>';
-						}
+							if (isset($person['twitter'])) {
+								$return .= '<a href="' . $person['twitter'] . '" target="_blank">';
+									$return .= '<div class="fa fa-twitter"></div>';
+								$return .= '</a>';
+							}
 		
-						if (isset($person['facebook'])) {
-							$return .= '<a href="' . $person['facebook'] . '" target="_blank">';
-								$return .= '<div class="fa fa-facebook"></div>';
-							$return .= '</a>';
-						}
+							if (isset($person['facebook'])) {
+								$return .= '<a href="' . $person['facebook'] . '" target="_blank">';
+									$return .= '<div class="fa fa-facebook"></div>';
+								$return .= '</a>';
+							}
 
-						if (isset($person['linkedin'])) {
-							$return .= '<a href="' . $person['linkedin'] . '" target="_blank">';
-								$return .= '<div class="fa fa-linkedin-square"></div>';
-							$return .= '</a>';
-						}
+							if (isset($person['linkedin'])) {
+								$return .= '<a href="' . $person['linkedin'] . '" target="_blank">';
+									$return .= '<div class="fa fa-linkedin-square"></div>';
+								$return .= '</a>';
+							}
 
-						if (isset($person['homepage'])) {
-							$return .= '<a href="' . $person['homepage'] . '" target="_blank">';
-								$return .= '<div class="fa fa-globe"></div>';
-							$return .= '</a>';
-						}
+							if (isset($person['homepage'])) {
+								$return .= '<a href="' . $person['homepage'] . '" target="_blank">';
+									$return .= '<div class="fa fa-globe"></div>';
+								$return .= '</a>';
+							}
 						
+						$return .= '</div>';
 					$return .= '</div>';
 				$return .= '</div>';
-			$return .= '</div>';
-
+			}
 		}
 	}
 		$return .= '</div>';
@@ -268,10 +271,12 @@ function citiznsdc_fetch_person($person_id) {
 		if (isset($data['thumbnail'])) {	
 			$results['image'] = $data['thumbnail'];
 		} else {
-			if ($data['gender'] == "male") {
+			if (strcasecmp($data['gender'], "male") == 0) {
 				$results['image'] = WP_PLUGIN_URL . "/wp-citizns-dc/images/genericM.jpg";
-			} else {
+			} else if (strcasecmp($data['gender'], "female") == 0) {
 				$results['image'] = WP_PLUGIN_URL . "/wp-citizns-dc/images/genericW.jpg";
+			} else {
+				$results['image'] = WP_PLUGIN_URL . "/wp-citizns-dc/images/genericU.jpg";
 			}
 		}
 
@@ -330,6 +335,36 @@ function citiznsdc_fetch_constituency($wmc_code) {
 	
 	$return .= '<div class="media-body">';
 
+	$by_election = citiznsdc_fetch_by_election($wmc_code);
+	if (!empty($by_election)) {
+		$return .= '<h4>' . $by_election['year'] . ' By-Election Results</h4>';
+		$return .= '<table class="table">';
+		$return .= '<tbody>';
+		$return .= '<tr>';
+		$return .= '<td class="election-result-icon text-center drop-td">';
+		$return .= '<div class="fa fa-trophy"></div>';
+		$return .= '</td>';
+		$return .= '<th class="election-result-header nowrap">Winner</th>';
+		$return .= '<td class="election-result-value">' . $by_election['elected_on_behalf_of'] . '</td>';
+		$return .= '</tr>';
+		$return .= '<tr>';
+		$return .= '<td class="election-result-icon text-center drop-td">';
+		$return .= '<div class="fa fa-user"></div>';
+		$return .= '</td>';
+		$return .= '<th class="election-result-header nowrap">MP</th>';
+		$return .= '<td class="election-result-value">' . $by_election['elected_name'] . '</td>';
+		$return .= '</tr>';
+		$return .= '<tr>';
+		$return .= '<td class="election-result-icon text-center drop-td">';
+		$return .= '<div class="fa fa-user"></div>';
+		$return .= '</td>';
+		$return .= '<th class="election-result-header nowrap">Turnout</th>';
+		$return .= '<td class="election-result-value">' . $by_election['turnout_pct'] . '%</td>';
+		$return .= '</tr>';
+		$return .= '</tbody>';
+		$return .= '</table>';
+	}
+
 	$elections = $data['elections'];
 	if (empty($elections)) {
 		$return .= 'There is no data available.';
@@ -346,18 +381,18 @@ function citiznsdc_fetch_constituency($wmc_code) {
 				$return .= '<table class="table">';
 				$return .= '<tbody>';
 				$return .= '<tr>';
-				$return .= '<td class="text-center drop-td">';
+				$return .= '<td class="election-result-icon text-center drop-td">';
 				$return .= '<div class="fa fa-trophy"></div>';
 				$return .= '</td>';
-				$return .= '<th class="nowrap">Winner</th>';
-				$return .= '<td>' . $candidate['on_behalf_of']['name'] . '</td>';
+				$return .= '<th class="election-result-header nowrap">Winner</th>';
+				$return .= '<td class="election-result-value">' . $candidate['on_behalf_of']['name'] . '</td>';
 				$return .= '</tr>';
 				$return .= '<tr>';
-				$return .= '<td class="text-center drop-td">';
+				$return .= '<td class="election-result-icon text-center drop-td">';
 				$return .= '<div class="fa fa-user"></div>';
 				$return .= '</td>';
-				$return .= '<th class="nowrap">MP</th>';
-				$return .= '<td>' . $candidate['person']['name'] . '</td>';
+				$return .= '<th class="election-result-header nowrap">MP</th>';
+				$return .= '<td class="election-result-value">' . $candidate['person']['name'] . '</td>';
 				$return .= '</tr>';
 				$return .= '</tbody>';
 				$return .= '</table>';
@@ -374,6 +409,22 @@ function citiznsdc_fetch_constituency($wmc_code) {
 	return $return;
 }
 
+
+function citiznsdc_fetch_by_election($wmc_code) {
+	global $wpdb;
+	global $by_election_table_name;
+	
+	$table_name = $wpdb->prefix . $by_election_table_name;
+
+	return $wpdb->get_row(
+		$wpdb->prepare(
+            "SELECT * FROM " . $table_name .
+            " WHERE constituency = %s",
+            $wmc_code
+        ),
+        ARRAY_A
+    );
+}
 
 function citiznsdc_store_query_metadata($area_id) {
 	$geoipInfo = geoip_detect2_get_info_from_current_ip();
@@ -571,26 +622,58 @@ $citiznsdc_db_version = '1.0';
 
 register_activation_hook( __FILE__, 'citiznsdc_install' );
 function citiznsdc_install() {
-	// create citiznsdc_requests db table
 	global $wpdb;
 	global $citiznsdc_db_version;
 
-	$table_name = $wpdb->prefix . 'citiznsdc_requests';
-	
 	$charset_collate = $wpdb->get_charset_collate();
 
+	// create citiznsdc_requests db table
+	$table_name = $wpdb->prefix . 'citiznsdc_requests';
+	
 	$sql = "CREATE TABLE $table_name (
 		id mediumint(9) NOT NULL AUTO_INCREMENT,
 		ts timestamp DEFAULT CURRENT_TIMESTAMP,
 		source varchar(20) NOT NULL,
 		constituency varchar(20) NOT NULL,
+		
 		PRIMARY KEY (id)
 	) $charset_collate;";
 
-	require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+	if ( ! function_exists('dbDelta') ) {
+		require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+	}
+
 	dbDelta( $sql );
 
 	add_option( 'citiznsdc_db_version', $citiznsdc_db_version );
+	
+	// create citiznsdc_by_elections db table
+	global $by_election_table_name;
+	$table_name = $wpdb->prefix . $by_election_table_name;
+	
+	$sql = "CREATE TABLE $table_name (
+		id mediumint(9) NOT NULL AUTO_INCREMENT,
+		constituency varchar(10) NOT NULL,
+		year varchar(4) NOT NULL,
+		elected_name varchar(50) NOT NULL,
+		dc_person_id mediumint NOT NULL,
+		elected_on_behalf_of varchar(50) NOT NULL,
+		dc_on_behalf_of_id mediumint NOT NULL,
+		elected_with_votes mediumint NOT NULL,
+		elected_with_pct decimal(3, 1) NOT NULL,
+		majority mediumint NOT NULL,
+		electorate mediumint NOT NULL,
+		total_votes mediumint NOT NULL,
+		turnout_pct decimal(3, 1) NOT NULL,
+		
+		PRIMARY KEY (id)
+	) $charset_collate;";
+
+	if ( ! function_exists('dbDelta') ) {
+		require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+	}
+
+	dbDelta( $sql );
 
 	// default API base URIs
 	global $default_mapit_buri;
