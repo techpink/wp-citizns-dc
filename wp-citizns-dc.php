@@ -3,7 +3,7 @@
 /**
 Plugin Name: WP Citizns Democracy Club
 Description: Access to the Democracy Club APIs
-Version: 0.4.2
+Version: 0.4.3
 Author: tchpnk
 Author URI: http://tchpnk.eu/
 License: GPLv2 or later
@@ -201,7 +201,7 @@ function citiznsdc_fetch_candidates($gss) {
 
 				$return .= '<div class="col-xs-12 col-sm-12 col-md-12 candidate">';
 					$return .= '<div class="candidate-info outer-heading hidden">';
-						$return .= '<div class="rosette theme-dc-' . str_replace(':', '', $candidate['on_behalf_of']['id']) . '">';
+						$return .= '<div class="rosette theme-' . str_replace(':', '', $candidate['on_behalf_of']['id']) . '">';
 							$return .= '<div class="fa fa-bookmark"></div>';
 						$return .= '</div>';
 						$return .= '<h4 class="drop-inline">' . $candidate['person']['name'] . '</h4>';
@@ -355,11 +355,7 @@ function citiznsdc_fetch_constituency($gss, $wmc_code) {
 		$return .= '<div class="fa fa-trophy"></div>';
 		$return .= '</td>';
 		$return .= '<th class="election-result-header nowrap">Winner</th>';
-		$return .= '<td class="election-result-value">';
-		$return .= $by_election['elected_on_behalf_of'];
-		$return .= '<span class="divider">|</span>';
-		$return .= ($by_election['gain']) ? "Gain" : "Hold";
-		$return .= '</td>';
+		$return .= '<td class="election-result-value">' . $by_election['elected_on_behalf_of'] . '</td>';
 		$return .= '</tr>';
 		$return .= '<tr>';
 		$return .= '<td class="election-result-icon text-center drop-td">';
@@ -718,7 +714,6 @@ function citiznsdc_install() {
 			electorate mediumint NOT NULL,
 			total_votes mediumint NOT NULL,
 			turnout_pct decimal(3, 1) NOT NULL,
-			gain tinyint(1) NOT NULL,
 		
 			PRIMARY KEY (id)
 		) $charset_collate;";
