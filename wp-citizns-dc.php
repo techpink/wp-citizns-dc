@@ -3,7 +3,7 @@
 /**
 Plugin Name: WP Citizns Democracy Club
 Description: Access to the Democracy Club APIs
-Version: 0.4.1
+Version: 0.4.2
 Author: tchpnk
 Author URI: http://tchpnk.eu/
 License: GPLv2 or later
@@ -14,7 +14,11 @@ defined( 'ABSPATH' ) or die( 'No script kiddies please!' );
 
 require_once 'vendor/autoload.php';
 
+global $by_election_table_name;
 $by_election_table_name = 'citiznsdc_by_elections';
+
+global $eu_referendum_table_name;
+$eu_referendum_table_name = 'citiznsdc_eu_referendum';
 
 
 $upload_dir = wp_upload_dir();
@@ -106,15 +110,21 @@ function citiznsdc_candidates_func($atts) {
 
 add_shortcode( 'citiznsdc_constituency', 'citiznsdc_constituency_func' );
 function citiznsdc_constituency_func($atts) {
+	$gss = $_GET['gss'];
+	if (!isset($gss)) {
+		global $wp_query;
+		$gss = $wp_query->query_vars['gss'];
+	}
+
 	$wmc = $_GET['wmc'];
 	if (!isset($wmc)) {
 		global $wp_query;
 		$wmc = $wp_query->query_vars['wmc'];
 	}
 
-	if (isset($wmc)) {
+	if (isset($gss) and isset($wmc)) {
 		try {
-			return citiznsdc_fetch_constituency($wmc);
+			return citiznsdc_fetch_constituency($gss, $wmc);
 		} catch (GuzzleHttp\Exception\ClientException $e) {
 			// area id invalid/unrecognised
 			// fall through to default message
@@ -159,9 +169,9 @@ function citiznsdc_postcode_to_wmc_codes($postcode) {
 	}
 }
 
-function citiznsdc_fetch_candidates($wmc_gss) {
+function citiznsdc_fetch_candidates($gss) {
 	global $dcposts_client;
-	$response = $dcposts_client->get('WMC%3A' . $wmc_gss . '/', [
+	$response = $dcposts_client->get('WMC%3A' . $gss . '/', [
 		'headers' => [
 			'Accept' => 'application/json'
 		]
@@ -313,7 +323,7 @@ function citiznsdc_fetch_person($person_id) {
 }
 
 
-function citiznsdc_fetch_constituency($wmc_code) {
+function citiznsdc_fetch_constituency($gss, $wmc_code) {
 	$last_election = "2015";
 
 	global $dcposts_client;
@@ -400,6 +410,26 @@ function citiznsdc_fetch_constituency($wmc_code) {
 		}
 	}
 	
+	$eu_referendum = citiznsdc_fetch_eu_referendum($gss);
+	if (!empty($eu_referendum)) {
+		$return .= '<h4>EU Referendum Results</h4>';
+		$return .= '<table class="table">';
+		$return .= '<tbody>';
+		$return .= '<tr>';
+		$return .= '<td class="election-result-icon text-center drop-td">';
+		$return .= '<div class="fa fa-check-square-o"></div>';
+		$return .= '</td>';
+		$return .= '<th class="election-result-header nowrap">Decision</th>';
+		if ($eu_referendum['leave_pct'] > $eu_referendum['remain_pct']) {
+				$return .= '<td class="election-result-value">Leave (' . $eu_referendum['leave_pct'] . '%)</td>';
+			} else {
+				$return .= '<td class="election-result-value">Remain (' . $eu_referendum['remain_pct'] . '%)</td>';
+			}
+		$return .= '</tr>';
+		$return .= '</tbody>';
+		$return .= '</table>';
+	}
+
 	// media-body
 	$return .= '</div>';
 	
@@ -421,6 +451,22 @@ function citiznsdc_fetch_by_election($wmc_code) {
             "SELECT * FROM " . $table_name .
             " WHERE constituency = %s",
             $wmc_code
+        ),
+        ARRAY_A
+    );
+}
+
+function citiznsdc_fetch_eu_referendum($gss) {
+	global $wpdb;
+	global $eu_referendum_table_name;
+	
+	$table_name = $wpdb->prefix . $eu_referendum_table_name;
+
+	return $wpdb->get_row(
+		$wpdb->prepare(
+            "SELECT * FROM " . $table_name .
+            " WHERE constituency = %s",
+            $gss
         ),
         ARRAY_A
     );
@@ -627,53 +673,79 @@ function citiznsdc_install() {
 
 	$charset_collate = $wpdb->get_charset_collate();
 
-	// create citiznsdc_requests db table
+	// citiznsdc_requests db table
 	$table_name = $wpdb->prefix . 'citiznsdc_requests';
-	
-	$sql = "CREATE TABLE $table_name (
-		id mediumint(9) NOT NULL AUTO_INCREMENT,
-		ts timestamp DEFAULT CURRENT_TIMESTAMP,
-		source varchar(20) NOT NULL,
-		constituency varchar(20) NOT NULL,
+	if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+		// create table
+		$sql = "CREATE TABLE $table_name (
+			id mediumint(9) NOT NULL AUTO_INCREMENT,
+			ts timestamp DEFAULT CURRENT_TIMESTAMP,
+			source varchar(20) NOT NULL,
+			constituency varchar(20) NOT NULL,
 		
-		PRIMARY KEY (id)
-	) $charset_collate;";
+			PRIMARY KEY (id)
+		) $charset_collate;";
 
-	if ( ! function_exists('dbDelta') ) {
-		require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+		if ( !function_exists('dbDelta') ) {
+			require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+		}
+
+		dbDelta( $sql );
+
+		add_option( 'citiznsdc_db_version', $citiznsdc_db_version );
 	}
-
-	dbDelta( $sql );
-
-	add_option( 'citiznsdc_db_version', $citiznsdc_db_version );
 	
-	// create citiznsdc_by_elections db table
+	// citiznsdc_by_elections db table
 	global $by_election_table_name;
 	$table_name = $wpdb->prefix . $by_election_table_name;
-	
-	$sql = "CREATE TABLE $table_name (
-		id mediumint(9) NOT NULL AUTO_INCREMENT,
-		constituency varchar(10) NOT NULL,
-		year varchar(4) NOT NULL,
-		elected_name varchar(50) NOT NULL,
-		dc_person_id mediumint NOT NULL,
-		elected_on_behalf_of varchar(50) NOT NULL,
-		dc_on_behalf_of_id mediumint NOT NULL,
-		elected_with_votes mediumint NOT NULL,
-		elected_with_pct decimal(3, 1) NOT NULL,
-		majority mediumint NOT NULL,
-		electorate mediumint NOT NULL,
-		total_votes mediumint NOT NULL,
-		turnout_pct decimal(3, 1) NOT NULL,
+	if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+		// create table
+		$sql = "CREATE TABLE $table_name (
+			id mediumint(9) NOT NULL AUTO_INCREMENT,
+			constituency varchar(10) NOT NULL,
+			year varchar(4) NOT NULL,
+			elected_name varchar(50) NOT NULL,
+			dc_person_id mediumint NOT NULL,
+			elected_on_behalf_of varchar(50) NOT NULL,
+			dc_on_behalf_of_id mediumint NOT NULL,
+			elected_with_votes mediumint NOT NULL,
+			elected_with_pct decimal(3, 1) NOT NULL,
+			majority mediumint NOT NULL,
+			electorate mediumint NOT NULL,
+			total_votes mediumint NOT NULL,
+			turnout_pct decimal(3, 1) NOT NULL,
 		
-		PRIMARY KEY (id)
-	) $charset_collate;";
+			PRIMARY KEY (id)
+		) $charset_collate;";
 
-	if ( ! function_exists('dbDelta') ) {
-		require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+		if ( !function_exists('dbDelta') ) {
+			require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+		}
+
+		dbDelta( $sql );
 	}
+	
+	// citiznsdc_eu_referendum db table
+	global $eu_referendum_table_name;
+	$table_name = $wpdb->prefix . $eu_referendum_table_name;
+	if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+		// create table
+		$sql = "CREATE TABLE $table_name (
+			id mediumint(9) NOT NULL AUTO_INCREMENT,
+			constituency varchar(10) NOT NULL,
+			leave_pct decimal(4, 2) NOT NULL,
+			remain_pct decimal(4, 2) NOT NULL,
+			is_estimate tinyint(1) NOT NULL,
+		
+			PRIMARY KEY (id)
+		) $charset_collate;";
 
-	dbDelta( $sql );
+		if ( !function_exists('dbDelta') ) {
+			require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+		}
+
+		dbDelta( $sql );
+	}
 
 	// default API base URIs
 	global $default_mapit_buri;
