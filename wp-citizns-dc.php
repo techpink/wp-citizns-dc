@@ -3,7 +3,7 @@
 /**
 Plugin Name: WP Citizns Democracy Club
 Description: Access to the Democracy Club APIs
-Version: 0.4.3
+Version: 0.4.4
 Author: tchpnk
 Author URI: http://tchpnk.eu/
 License: GPLv2 or later
@@ -14,69 +14,7 @@ defined( 'ABSPATH' ) or die( 'No script kiddies please!' );
 
 require_once 'vendor/autoload.php';
 
-global $by_election_table_name;
-$by_election_table_name = 'citiznsdc_by_elections';
-
-global $eu_referendum_table_name;
-$eu_referendum_table_name = 'citiznsdc_eu_referendum';
-
-
-$upload_dir = wp_upload_dir();
-$cache_dir = $upload_dir['basedir'].'/citiznsdc-cache';
-if ( ! file_exists( $cache_dir ) ) {
-    wp_mkdir_p( $cache_dir );
-}
-
-
-// Create default HandlerStack
-$stack = GuzzleHttp\HandlerStack::create();
-
-// Add this middleware to the top with `push`
-$stack->push(
-  new Kevinrob\GuzzleCache\CacheMiddleware(
-    new Kevinrob\GuzzleCache\Strategy\GreedyCacheStrategy(
-      new Kevinrob\GuzzleCache\Storage\DoctrineCacheStorage(
-        new Doctrine\Common\Cache\ChainCache(
-        	[
-        		new Doctrine\Common\Cache\ArrayCache(),
-        		new Doctrine\Common\Cache\FilesystemCache($cache_dir . '/')
-      		]
-      	)
-      ),
-      3600
-    )
-  ), 
-  'cache'
-);
-
-// Mapit guzzle client
-$default_mapit_buri = "https://mapit.mysociety.org/postcode/";
-$mapit_buri = (!get_option( "citiznsdc_mapit_buri")) ? $default_mapit_buri : get_option( "citiznsdc_mapit_buri");
-$mapit_client = new GuzzleHttp\Client([
-	'base_uri' => $mapit_buri,
-	'handler' => $stack,
-	'timeout' => 2.0
-]);
-
-// DC posts guzzle client
-$default_posts_buri = "http://candidates.democracyclub.org.uk/api/v0.9/posts/";
-$dcposts_buri = (!get_option( "citiznsdc_posts_buri")) ? $default_posts_buri : get_option("citiznsdc_posts_buri");
-$dcposts_client = new GuzzleHttp\Client([
-	'base_uri' => $dcposts_buri,
-	'handler' => $stack,
-	'timeout' => 5.0
-]);
-
-// DC persons guzzle client
-$default_persons_buri = "http://candidates.democracyclub.org.uk/api/v0.9/persons/";
-$dcpersons_buri = (!get_option("citiznsdc_persons_buri")) ? $default_persons_buri : get_option("citiznsdc_persons_buri");
-$dcpersons_client = new GuzzleHttp\Client([
-	'base_uri' => $dcpersons_buri,
-	'handler' => $stack,
-	'timeout' => 5.0
-]);
-
-
+// Shortcodes
 add_shortcode( 'citiznsdc_candidates', 'citiznsdc_candidates_func' );
 function citiznsdc_candidates_func($atts) {
 	$gss = $_GET['gss'];
@@ -144,30 +82,98 @@ function citiznsdc_constituency_func($atts) {
 	return $message;
 }
 
-function citiznsdc_postcode_to_wmc_codes($postcode) {
-	global $mapit_client;
-	$response = $mapit_client->get($postcode, [
-		'headers' => [
-			'Accept' => 'application/json',
-			'X-Api-Key' => get_option( "citiznsdc_mapit_apik")
-		]
-	]);
+add_shortcode( 'citiznsdc_postcode_search', 'citiznsdc_postcode_search_func' );
+function citiznsdc_postcode_search_func($atts) {
+	$placeholder = (!empty($atts['placeholder'])) ? $atts['placeholder'] : "Please enter a UK postcode";
 
-	$data = json_decode($response->getBody(), true);
-
-	$wmc = $data['shortcuts']['WMC'];
-	if (isset($wmc)) {
-		$wmc = (string) $wmc;
-
-		$area = $data['areas'][$wmc]['codes']['gss'];
-		if (isset($area)) {
-			return array (
-				'wmc' => $wmc,
-				'gss' => $area
-				);
-		}
-	}
+	?>
+	<div class="row">
+		<div class="col-md-3">&nbsp;</div>
+		<div class="col-md-6">								
+			<!-- FORM  -->
+			<?php
+			echo '<form class="search-form" name="citiznsdc-postcode-form" action="'. get_admin_url() .'admin-post.php" method="post">';
+			?>
+				<input type="hidden" name="action" value="citiznsdc-postcode-form" />
+				<div class="input-group">
+					<?php
+					echo '<input class="form-control" type="text" required name="citiznsdc_postcode" placeholder="' . strip_tags( trim( $placeholder ) ) . '"/>';
+					?>
+					<span class="input-group-btn">
+						<button class="btn btn-primary" onclick="document.getElementById('citiznsdc-postcode-form').submit();">
+							<span class="screen-reader-text">FIND</span>
+							FIND
+						</button>
+					</span>
+				</div>							
+			</form>							
+			<!-- /END FORM -->
+		</div>
+		<div class="col-md-3">&nbsp;</div>
+	</div>
+	<?php
 }
+
+// Create doctrine cache directory
+$upload_dir = wp_upload_dir();
+$cache_dir = $upload_dir['basedir'].'/citiznsdc-cache';
+if ( ! file_exists( $cache_dir ) ) {
+    wp_mkdir_p( $cache_dir );
+}
+
+
+// Create default HandlerStack
+$stack = GuzzleHttp\HandlerStack::create();
+
+// Add this middleware to the top with `push`
+$stack->push(
+  new Kevinrob\GuzzleCache\CacheMiddleware(
+    new Kevinrob\GuzzleCache\Strategy\GreedyCacheStrategy(
+      new Kevinrob\GuzzleCache\Storage\DoctrineCacheStorage(
+        new Doctrine\Common\Cache\ChainCache(
+        	[
+        		new Doctrine\Common\Cache\ArrayCache(),
+        		new Doctrine\Common\Cache\FilesystemCache($cache_dir . '/')
+      		]
+      	)
+      ),
+      3600
+    )
+  ), 
+  'cache'
+);
+
+// Mapit guzzle client
+$default_mapit_buri = "https://mapit.mysociety.org/postcode/";
+$mapit_buri = (!get_option( "citiznsdc_mapit_buri")) ? $default_mapit_buri : get_option( "citiznsdc_mapit_buri");
+$mapit_client = new GuzzleHttp\Client([
+	'base_uri' => $mapit_buri,
+	'handler' => $stack,
+	'timeout' => 2.0
+]);
+
+// DC posts guzzle client
+$default_posts_buri = "http://candidates.democracyclub.org.uk/api/v0.9/posts/";
+$dcposts_buri = (!get_option( "citiznsdc_posts_buri")) ? $default_posts_buri : get_option("citiznsdc_posts_buri");
+$dcposts_client = new GuzzleHttp\Client([
+	'base_uri' => $dcposts_buri,
+	'handler' => $stack,
+	'timeout' => 5.0
+]);
+
+// DC persons guzzle client
+$default_persons_buri = "http://candidates.democracyclub.org.uk/api/v0.9/persons/";
+$dcpersons_buri = (!get_option("citiznsdc_persons_buri")) ? $default_persons_buri : get_option("citiznsdc_persons_buri");
+$dcpersons_client = new GuzzleHttp\Client([
+	'base_uri' => $dcpersons_buri,
+	'handler' => $stack,
+	'timeout' => 5.0
+]);
+
+
+//
+// Democracy Club API helpers
+//
 
 function citiznsdc_fetch_candidates($gss) {
 	global $dcposts_client;
@@ -201,10 +207,15 @@ function citiznsdc_fetch_candidates($gss) {
 
 				$return .= '<div class="col-xs-12 col-sm-12 col-md-12 candidate">';
 					$return .= '<div class="candidate-info outer-heading hidden">';
-						$return .= '<div class="rosette theme-' . str_replace(':', '', $candidate['on_behalf_of']['id']) . '">';
+						$return .= '<div class="rosette theme-dc-' . str_replace(':', '', $candidate['on_behalf_of']['id']) . '">';
 							$return .= '<div class="fa fa-bookmark"></div>';
 						$return .= '</div>';
 						$return .= '<h4 class="drop-inline">' . $candidate['person']['name'] . '</h4>';
+						if (isset($person['more_united']) and isset($person['more_united_link'])) {
+							$return .= '<a href="' . $person['more_united_link'] . '" target="_blank">';
+								$return .= '<img class="more-united-logo" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/more-united-logo.svg">';
+							$return .= '</a>';
+						}
 					$return .= '</div>';
 					$return .= '<div class="candidate-photo">';
 						if (isset($person['image'])) {
@@ -217,6 +228,11 @@ function citiznsdc_fetch_candidates($gss) {
 								$return .= '<div class="fa fa-bookmark"></div>';
 							$return .= '</div>';
 							$return .= '<h4 class="drop-inline">' . $candidate['person']['name'] . '</h4>';
+							if (isset($person['more_united']) and isset($person['more_united_link'])) {
+								$return .= '<a href="' . $person['more_united_link'] . '" target="_blank">';
+									$return .= '<img class="more-united-logo" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/more-united-logo.svg">';
+								$return .= '</a>';
+							}
 						$return .= '</div>';
 						$return .= '<div class="candidate-party text-lock">';
 							$return .= '<div>' . $candidate['on_behalf_of']['name'] . '</div> ';
@@ -309,6 +325,16 @@ function citiznsdc_fetch_person($person_id) {
 				$results['linkedin'] = $link['url'];
 			}
 		}
+		
+		// fetch extra info
+		$extra_info = citiznsdc_fetch_person_extra_info($person_id);
+		if (!empty($extra_info)) {
+			$results['more_united'] = $extra_info['more_united_candidate'];
+			if ($results['more_united'] == 1) {
+				$results['more_united_link'] = $extra_info['more_united_link'];
+			}
+		}
+		
 	} catch (GuzzleHttp\Exception\ClientException $e) {
 		// person id is invalid/unrecognised
 		// fall through to default message
@@ -355,7 +381,11 @@ function citiznsdc_fetch_constituency($gss, $wmc_code) {
 		$return .= '<div class="fa fa-trophy"></div>';
 		$return .= '</td>';
 		$return .= '<th class="election-result-header nowrap">Winner</th>';
-		$return .= '<td class="election-result-value">' . $by_election['elected_on_behalf_of'] . '</td>';
+		$return .= '<td class="election-result-value">';
+		$return .= $by_election['elected_on_behalf_of'];
+		$return .= '<span class="divider">|</span>';
+		$return .= ($by_election['gain']) ? "Gain" : "Hold";
+		$return .= '</td>';
 		$return .= '</tr>';
 		$return .= '<tr>';
 		$return .= '<td class="election-result-icon text-center drop-td">';
@@ -412,7 +442,7 @@ function citiznsdc_fetch_constituency($gss, $wmc_code) {
 	
 	$eu_referendum = citiznsdc_fetch_eu_referendum($gss);
 	if (!empty($eu_referendum)) {
-		$return .= '<h4>EU Referendum Results</h4>';
+		$return .= '<h4>2016 EU Referendum Results</h4>';
 		$return .= '<table class="table">';
 		$return .= '<tbody>';
 		$return .= '<tr>';
@@ -440,6 +470,13 @@ function citiznsdc_fetch_constituency($gss, $wmc_code) {
 }
 
 
+//
+// Custom db tables
+//
+
+global $by_election_table_name;
+$by_election_table_name = 'citiznsdc_by_elections';
+
 function citiznsdc_fetch_by_election($wmc_code) {
 	global $wpdb;
 	global $by_election_table_name;
@@ -455,6 +492,9 @@ function citiznsdc_fetch_by_election($wmc_code) {
         ARRAY_A
     );
 }
+
+global $eu_referendum_table_name;
+$eu_referendum_table_name = 'citiznsdc_eu_referendum';
 
 function citiznsdc_fetch_eu_referendum($gss) {
 	global $wpdb;
@@ -472,68 +512,30 @@ function citiznsdc_fetch_eu_referendum($gss) {
     );
 }
 
-function citiznsdc_store_query_metadata($area_id) {
-	$geoipInfo = geoip_detect2_get_info_from_current_ip();
-	if (isset($geoipInfo->country->isoCode) and isset($area_id)) {
-		$source = $geoipInfo->country->isoCode;
+global $persons_extra_info_table_name;
+$persons_extra_info_table_name = 'citiznsdc_persons_extra_info';
+
+function citiznsdc_fetch_person_extra_info($person_id) {
+	global $wpdb;
+	global $persons_extra_info_table_name;
 	
-		global $wpdb;
-		$table_name = $wpdb->prefix . 'citiznsdc_requests';
-		
-		$wpdb->insert ( 
-			$table_name, 
-			array ( 
-				'source' => $source, 
-				'constituency' => $area_id 
-			) 
-		);
-	}
+	$table_name = $wpdb->prefix . $persons_extra_info_table_name;
+	
+	return $wpdb->get_row(
+		$wpdb->prepare(
+            "SELECT * FROM " . $table_name .
+            " WHERE dc_person_id = %s",
+            $person_id
+        ),
+        ARRAY_A
+    );
 }
 
 
-add_shortcode( 'citiznsdc_postcode_search', 'citiznsdc_postcode_search_func' );
-function citiznsdc_postcode_search_func($atts) {
-	$placeholder = (!empty($atts['placeholder'])) ? $atts['placeholder'] : "Please enter a UK postcode";
 
-	?>
-	<div class="row">
-		<div class="col-md-6">								
-			<!-- FORM  -->
-			<?php
-			echo '<form class="search-form" name="citiznsdc-postcode-form" action="'. get_admin_url() .'admin-post.php" method="post">';
-			?>
-				<input type="hidden" name="action" value="citiznsdc-postcode-form" />
-				<div class="input-group">
-					<?php
-					echo '<input class="form-control" type="text" required name="citiznsdc_postcode" placeholder="' . strip_tags( trim( $placeholder ) ) . '"/>';
-					?>
-					<span class="input-group-btn">
-						<button class="btn btn-primary" onclick="document.getElementById('citiznsdc-postcode-form').submit();">
-							<span class="screen-reader-text">FIND</span>
-							FIND
-						</button>
-					</span>
-				</div>							
-			</form>							
-			<!-- /END FORM -->
-		</div>
-		<div class="col-md-6">&nbsp;</div>
-	</div>
-	<?php
-}
-
-
-function create_link($link, $link_text) {
-	return "<a href=\"{$link}\" target=\"_blank\">{$link_text}</a>";
-}
-
-
-function dump($var) {
-	echo "<pre>";
-	var_dump($var);
-	echo "</pre>";
-}
-
+//
+// Postcode search
+//
 
 // If the user is logged in
 add_action('admin_post_citiznsdc-postcode-form', 'citiznsdc_handle_form_action');
@@ -567,6 +569,93 @@ function citiznsdc_handle_form_action(){
 	exit;
 }
 
+// Mapit API helper
+function citiznsdc_postcode_to_wmc_codes($postcode) {
+	global $mapit_client;
+	$response = $mapit_client->get($postcode, [
+		'headers' => [
+			'Accept' => 'application/json',
+			'X-Api-Key' => get_option( "citiznsdc_mapit_apik")
+		]
+	]);
+
+	$data = json_decode($response->getBody(), true);
+
+	$wmc = $data['shortcuts']['WMC'];
+	if (isset($wmc)) {
+		$wmc = (string) $wmc;
+
+		$area = $data['areas'][$wmc]['codes']['gss'];
+		if (isset($area)) {
+			return array (
+				'wmc' => $wmc,
+				'gss' => $area
+				);
+		}
+	}
+}
+
+
+// store anonomous analytics for each postcode search
+// the data stored is country the request originated from (based on IP) and
+// the WMC code of the constituency associated with the postcode. 
+function citiznsdc_store_query_metadata($area_id) {
+	$geoipInfo = geoip_detect2_get_info_from_current_ip();
+	if (isset($geoipInfo->country->isoCode) and isset($area_id)) {
+		$source = $geoipInfo->country->isoCode;
+	
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'citiznsdc_requests';
+		
+		$wpdb->insert ( 
+			$table_name, 
+			array ( 
+				'source' => $source, 
+				'constituency' => $area_id 
+			) 
+		);
+	}
+}
+
+//
+// URL rewrite and query param translation
+//
+
+add_action('generate_rewrite_rules', 'add_rewrite_rules');
+function add_rewrite_rules( $wp_rewrite ) {
+	$new_rules = array(
+		'wmc/?([0-9]{5})/gss/?([A-Z][0-9]{8})/?$' => 'index.php?pagename=' .
+		get_option("citiznsdc_cand_slug") . '&wmc=$matches[1]&gss=$matches[2]'
+	);
+	
+	// Add the rules to the top, to make sure they have priority
+	$wp_rewrite -> rules = $new_rules + $wp_rewrite -> rules;
+}
+
+
+add_filter('query_vars', 'add_query_vars');
+function add_query_vars( $public_query_vars ) {
+	$public_query_vars[] = "wmc";
+	$public_query_vars[] = "gss";
+ 
+	return $public_query_vars;
+}
+
+
+function create_link($link, $link_text) {
+	return "<a href=\"{$link}\" target=\"_blank\">{$link_text}</a>";
+}
+
+
+function dump($var) {
+	echo "<pre>";
+	var_dump($var);
+	echo "</pre>";
+}
+
+//
+// Settings menu
+//
 
 // Register the menu
 add_action( "admin_menu", "citiznsdc_plugin_menu_func" );
@@ -714,6 +803,7 @@ function citiznsdc_install() {
 			electorate mediumint NOT NULL,
 			total_votes mediumint NOT NULL,
 			turnout_pct decimal(3, 1) NOT NULL,
+			gain tinyint(1) NOT NULL,
 		
 			PRIMARY KEY (id)
 		) $charset_collate;";
@@ -747,6 +837,28 @@ function citiznsdc_install() {
 		dbDelta( $sql );
 	}
 
+	// citiznsdc_persons_extra_info db table
+	global $persons_extra_info_table_name;
+	$table_name = $wpdb->prefix . $persons_extra_info_table_name;
+	if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+		// create table
+		$sql = "CREATE TABLE $table_name (
+			id mediumint(9) NOT NULL AUTO_INCREMENT,
+			dc_person_id mediumint NOT NULL,
+			article_50_bill tinyint(1),
+			more_united_candidate tinyint(1) NOT NULL,
+			more_united_link varchar(200),
+		
+			PRIMARY KEY (id)
+		) $charset_collate;";
+
+		if ( !function_exists('dbDelta') ) {
+			require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+		}
+
+		dbDelta( $sql );
+	}
+
 	// default API base URIs
 	global $default_mapit_buri;
    	add_option( 'citiznsdc_mapit_buri', $default_mapit_buri );
@@ -757,24 +869,3 @@ function citiznsdc_install() {
    	global $default_persons_buri;
    	add_option( 'citiznsdc_persons_buri', $default_persons_buri );
 }
-
-
-function add_rewrite_rules( $wp_rewrite ) {
-	$new_rules = array(
-		'wmc/?([0-9]{5})/gss/?([A-Z][0-9]{8})/?$' => 'index.php?pagename=' .
-		get_option("citiznsdc_cand_slug") . '&wmc=$matches[1]&gss=$matches[2]'
-	);
-	
-	// Add the rules to the top, to make sure they have priority
-	$wp_rewrite -> rules = $new_rules + $wp_rewrite -> rules;
-}
-add_action('generate_rewrite_rules', 'add_rewrite_rules');
-
-
-function add_query_vars( $public_query_vars ) {
-	$public_query_vars[] = "wmc";
-	$public_query_vars[] = "gss";
- 
-	return $public_query_vars;
-}
-add_filter('query_vars', 'add_query_vars');
