@@ -3,7 +3,7 @@
 /**
 Plugin Name: WP Citizns Democracy Club
 Description: Access to the Democracy Club APIs
-Version: 0.4.5
+Version: 0.4.6
 Author: tchpnk
 Author URI: http://tchpnk.eu/
 License: GPLv2 or later
@@ -216,12 +216,12 @@ function citiznsdc_fetch_candidates($gss) {
 							$return .= '<div class="fa fa-bookmark"></div>';
 						$return .= '</div>';
 						$return .= '<h4 class="drop-inline">' . $candidate['person']['name'] . '</h4>';
-						if (isset($person['more_united']) and isset($person['more_united_link'])) {
+						if ($person['more_united'] == 1 and isset($person['more_united_link'])) {
 							$return .= '<a href="' . $person['more_united_link'] . '" target="_blank">';
 								$return .= '<img class="more-united-logo" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/more-united-logo.svg">';
 							$return .= '</a>';
 						}
-						if (isset($person['best_for_britian'])) {
+						if ($person['best_for_britian'] == 1) {
 							$return .= '<a href="https://bestforbritain.org" target="_blank">';
 								$return .= '<img class="best-for-britain-badge" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/best-for-britain-badge.png">';
 							$return .= '</a>';
@@ -238,12 +238,12 @@ function citiznsdc_fetch_candidates($gss) {
 								$return .= '<div class="fa fa-bookmark"></div>';
 							$return .= '</div>';
 							$return .= '<h4 class="drop-inline">' . $candidate['person']['name'] . '</h4>';
-							if (isset($person['more_united']) and isset($person['more_united_link'])) {
+							if ($person['more_united'] == 1 and isset($person['more_united_link'])) {
 								$return .= '<a href="' . $person['more_united_link'] . '" target="_blank">';
 									$return .= '<img class="more-united-logo" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/more-united-logo.svg">';
 								$return .= '</a>';
 							}
-							if (isset($person['best_for_britian'])) {
+							if ($person['best_for_britian'] == 1) {
 								$return .= '<a href="https://bestforbritain.org" target="_blank">';
 									$return .= '<img class="best-for-britain-badge" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/best-for-britain-badge.png">';
 								$return .= '</a>';
