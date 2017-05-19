@@ -3,7 +3,7 @@
 /**
 Plugin Name: WP Citizns Democracy Club
 Description: Access to the Democracy Club APIs
-Version: 0.4.4
+Version: 0.4.5
 Author: tchpnk
 Author URI: http://tchpnk.eu/
 License: GPLv2 or later
@@ -189,7 +189,12 @@ function citiznsdc_fetch_candidates($gss) {
 	$candidates = $data['memberships'];
 
 	$return = '<div class="media">';
-		$return .= '<div class="media-header theme-one-header">';
+		$return .= '<div class="media-header theme-citiznsdc-header">';
+			$return .= '<div class="pull-right">';
+				$return .= '<a href="#" class="theme-citiznsdc-info btn btn-default" title="Find out more" data-toggle="modal" data-target="#candidatesModal">';
+					$return .= '<div class="fa fa-info-circle"></div>';
+				$return .= '</a>';
+			$return .= '</div>';
 			$return .= '<div class="media-heading">';
 				$return .= '<div class="fa fa-user"></div>';
 				$return .= 'Candidates for ' . $election['name'];
@@ -216,6 +221,11 @@ function citiznsdc_fetch_candidates($gss) {
 								$return .= '<img class="more-united-logo" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/more-united-logo.svg">';
 							$return .= '</a>';
 						}
+						if (isset($person['best_for_britian'])) {
+							$return .= '<a href="https://bestforbritain.org" target="_blank">';
+								$return .= '<img class="best-for-britain-badge" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/best-for-britain-badge.png">';
+							$return .= '</a>';
+						}
 					$return .= '</div>';
 					$return .= '<div class="candidate-photo">';
 						if (isset($person['image'])) {
@@ -231,6 +241,11 @@ function citiznsdc_fetch_candidates($gss) {
 							if (isset($person['more_united']) and isset($person['more_united_link'])) {
 								$return .= '<a href="' . $person['more_united_link'] . '" target="_blank">';
 									$return .= '<img class="more-united-logo" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/more-united-logo.svg">';
+								$return .= '</a>';
+							}
+							if (isset($person['best_for_britian'])) {
+								$return .= '<a href="https://bestforbritain.org" target="_blank">';
+									$return .= '<img class="best-for-britain-badge" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/best-for-britain-badge.png">';
 								$return .= '</a>';
 							}
 						$return .= '</div>';
@@ -277,6 +292,27 @@ function citiznsdc_fetch_candidates($gss) {
 		$return .= '</div>';
 	$return .= '</div>';
 
+	$return .= '<div class="modal fade" id="candidatesModal" tabindex="-1" role="dialog" style="display: none;">';
+		$return .= '<div class="modal-dialog" role="document">';
+				$return .= '<div class="modal-content theme-citiznsdc-modal">';
+					$return .= '<div class="modal-header">';
+						$return .= '<button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">×</span></button>';
+						$return .= '<h4 class="modal-title">Candidates</h4>';
+					$return .= '</div>';
+					$return .= '<div class="modal-body">';
+						$return .= '<div>';
+						$return .= '<img class="more-united-logo" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/more-united-logo.svg">';
+						$return .= ' <p class="drop-inline">identifies candidates supported by <a href="http://www.moreunited.uk/about" target="_blank">More United</a> because they align with their values: Opportunity, Tolerance, Democracy, Environment, Openness.<p>';
+						$return .= '</div>';
+						$return .= '<div>';
+						$return .= '<img class="best-for-britain-badge" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/best-for-britain-badge.png">';
+						$return .= ' <p class="drop-inline">identifies candidates supported by <a href="https://bestforbritain.org/about" target="_blank">Best for Britain</a> because they campaign for a meaningful vote on the future relationship with Europe and who will be prepared to reject anything which leaves Britain worse off.<p>';
+						$return .= '</div>';
+					$return .= '</div>';
+				$return .= '</div>';
+		$return .= '</div>';
+	$return .= '</div>';
+	
 	return $return;
 }
 
@@ -333,6 +369,7 @@ function citiznsdc_fetch_person($person_id) {
 			if ($results['more_united'] == 1) {
 				$results['more_united_link'] = $extra_info['more_united_link'];
 			}
+			$results['best_for_britian'] = $extra_info['best_for_brit_candidate'];
 		}
 		
 	} catch (GuzzleHttp\Exception\ClientException $e) {
@@ -362,7 +399,7 @@ function citiznsdc_fetch_constituency($gss, $wmc_code) {
 	$data = json_decode($response->getBody(), true);
 
 	$return = '<div class="media">';
-	$return .= '<div class="media-header theme-one-header">';
+	$return .= '<div class="media-header theme-citiznsdc-header">';
 	$return .= '<div class="media-heading">';
 	$return .= '<div class="fa fa-map-marker"></div>';
 	$return .= $data['area']['name'];
@@ -848,6 +885,7 @@ function citiznsdc_install() {
 			article_50_bill tinyint(1),
 			more_united_candidate tinyint(1) NOT NULL,
 			more_united_link varchar(200),
+			best_for_brit_candidate tinyint(1) NOT NULL,
 		
 			PRIMARY KEY (id)
 		) $charset_collate;";
