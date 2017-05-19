@@ -334,11 +334,11 @@ function citiznsdc_fetch_person($person_id) {
 			$results['image'] = $data['thumbnail'];
 		} else {
 			if (strcasecmp($data['gender'], "male") == 0) {
-				$results['image'] = WP_PLUGIN_URL . "/wp-citizns-dc/images/genericM.jpg";
+				$results['image'] = WP_PLUGIN_URL . "/wp-citizns-dc/images/placeholderM.jpg";
 			} else if (strcasecmp($data['gender'], "female") == 0) {
-				$results['image'] = WP_PLUGIN_URL . "/wp-citizns-dc/images/genericW.jpg";
+				$results['image'] = WP_PLUGIN_URL . "/wp-citizns-dc/images/placeholderW.jpg";
 			} else {
-				$results['image'] = WP_PLUGIN_URL . "/wp-citizns-dc/images/genericU.jpg";
+				$results['image'] = WP_PLUGIN_URL . "/wp-citizns-dc/images/placeholderU.jpg";
 			}
 		}
 
