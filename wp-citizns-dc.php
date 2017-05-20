@@ -308,6 +308,7 @@ function citiznsdc_fetch_candidates($gss) {
 						$return .= '<img class="best-for-britain-badge" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/best-for-britain-badge.png">';
 						$return .= ' <p class="drop-inline">identifies candidates supported by <a href="https://bestforbritain.org/about" target="_blank">Best for Britain</a> because they campaign for a meaningful vote on the future relationship with Europe and who will be prepared to reject anything which leaves Britain worse off.<p>';
 						$return .= '</div>';
+						$return .= '<p> Candidate information supplied by <a href="https://candidates.democracyclub.org.uk" target="_blank">Democracy Club</a></p>';
 					$return .= '</div>';
 				$return .= '</div>';
 		$return .= '</div>';
