@@ -197,7 +197,7 @@ function citiznsdc_fetch_candidates($gss) {
 			$return .= '</div>';
 			$return .= '<div class="media-heading">';
 				$return .= '<div class="fa fa-user"></div>';
-				$return .= 'Candidates for ' . $election['name'];
+				$return .= $election['name'] . ' Candidates';
 			$return .= '</div>';
 		$return .= '</div>';
 	
@@ -301,12 +301,12 @@ function citiznsdc_fetch_candidates($gss) {
 					$return .= '</div>';
 					$return .= '<div class="modal-body">';
 						$return .= '<div>';
-						$return .= '<img class="more-united-logo" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/more-united-logo.svg">';
-						$return .= ' <p class="drop-inline">identifies candidates supported by <a href="http://www.moreunited.uk/about" target="_blank">More United</a> because they align with their values: Opportunity, Tolerance, Democracy, Environment, Openness.<p>';
+							$return .= '<img class="more-united-logo" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/more-united-logo.svg">';
+							$return .= ' <p class="drop-inline">identifies candidates supported by <a href="http://www.moreunited.uk/about" target="_blank">More United</a> because they align with their values: Opportunity, Tolerance, Democracy, Environment, Openness.<p>';
 						$return .= '</div>';
 						$return .= '<div>';
-						$return .= '<img class="best-for-britain-badge" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/best-for-britain-badge.png">';
-						$return .= ' <p class="drop-inline">identifies candidates supported by <a href="https://bestforbritain.org/about" target="_blank">Best for Britain</a> because they campaign for a meaningful vote on the future relationship with Europe and who will be prepared to reject anything which leaves Britain worse off.<p>';
+							$return .= '<img class="best-for-britain-badge" src="' . WP_PLUGIN_URL . '/wp-citizns-dc/images/best-for-britain-badge.png">';
+							$return .= ' <p class="drop-inline">identifies candidates supported by <a href="https://bestforbritain.org/about" target="_blank">Best for Britain</a> because they campaign for a meaningful vote on the future relationship with Europe and who will be prepared to reject anything which leaves Britain worse off.<p>';
 						$return .= '</div>';
 						$return .= '<p> Candidate information supplied by <a href="https://candidates.democracyclub.org.uk" target="_blank">Democracy Club</a></p>';
 					$return .= '</div>';
@@ -400,106 +400,122 @@ function citiznsdc_fetch_constituency($gss, $wmc_code) {
 	$data = json_decode($response->getBody(), true);
 
 	$return = '<div class="media">';
-	$return .= '<div class="media-header theme-citiznsdc-header">';
-	$return .= '<div class="media-heading">';
-	$return .= '<div class="fa fa-map-marker"></div>';
-	$return .= $data['area']['name'];
-	$return .= '</div>';
-	$return .= '</div>';
+		$return .= '<div class="media-header theme-citiznsdc-header">';
+			$return .= '<div class="media-heading">';
+				$return .= '<div class="fa fa-map-marker"></div>';
+				$return .= $data['area']['name'];
+			$return .= '</div>';
+		$return .= '</div>';
 	
-	$return .= '<div class="media-body">';
+		$return .= '<div class="media-body">';
 
-	$by_election = citiznsdc_fetch_by_election($wmc_code);
-	if (!empty($by_election)) {
-		$return .= '<h4>' . $by_election['year'] . ' By-Election Results</h4>';
-		$return .= '<table class="table">';
-		$return .= '<tbody>';
-		$return .= '<tr>';
-		$return .= '<td class="election-result-icon text-center drop-td">';
-		$return .= '<div class="fa fa-trophy"></div>';
-		$return .= '</td>';
-		$return .= '<th class="election-result-header nowrap">Winner</th>';
-		$return .= '<td class="election-result-value">';
-		$return .= $by_election['elected_on_behalf_of'];
-		$return .= '<span class="divider">|</span>';
-		$return .= ($by_election['gain']) ? "Gain" : "Hold";
-		$return .= '</td>';
-		$return .= '</tr>';
-		$return .= '<tr>';
-		$return .= '<td class="election-result-icon text-center drop-td">';
-		$return .= '<div class="fa fa-user"></div>';
-		$return .= '</td>';
-		$return .= '<th class="election-result-header nowrap">MP</th>';
-		$return .= '<td class="election-result-value">' . $by_election['elected_name'] . '</td>';
-		$return .= '</tr>';
-		$return .= '<tr>';
-		$return .= '<td class="election-result-icon text-center drop-td">';
-		$return .= '<div class="fa fa-user"></div>';
-		$return .= '</td>';
-		$return .= '<th class="election-result-header nowrap">Turnout</th>';
-		$return .= '<td class="election-result-value">' . $by_election['turnout_pct'] . '%</td>';
-		$return .= '</tr>';
-		$return .= '</tbody>';
-		$return .= '</table>';
-	}
-
-	$elections = $data['elections'];
-	if (empty($elections)) {
-		$return .= 'There is no data available.';
-	} else {
-		foreach($elections as $election) {
-			if ($election['id'] == $last_election) {
-				$return .= '<h4>' . $election['name'] . ' Results</h4>';
-			}
-		}
-		
-		$candidates = $data['memberships'];
-		foreach($candidates as $candidate) {
-			if ($candidate['election']['id'] == $last_election and $candidate['elected']) {
-				$return .= '<table class="table">';
+		$by_election = citiznsdc_fetch_by_election($wmc_code);
+		if (!empty($by_election)) {
+			$return .= '<h4>' . $by_election['year'] . ' By-Election Results</h4>';
+			$return .= '<table class="table">';
 				$return .= '<tbody>';
-				$return .= '<tr>';
-				$return .= '<td class="election-result-icon text-center drop-td">';
-				$return .= '<div class="fa fa-trophy"></div>';
-				$return .= '</td>';
-				$return .= '<th class="election-result-header nowrap">Winner</th>';
-				$return .= '<td class="election-result-value">' . $candidate['on_behalf_of']['name'] . '</td>';
-				$return .= '</tr>';
-				$return .= '<tr>';
-				$return .= '<td class="election-result-icon text-center drop-td">';
-				$return .= '<div class="fa fa-user"></div>';
-				$return .= '</td>';
-				$return .= '<th class="election-result-header nowrap">MP</th>';
-				$return .= '<td class="election-result-value">' . $candidate['person']['name'] . '</td>';
-				$return .= '</tr>';
+					$return .= '<tr>';
+						$return .= '<td class="election-result-icon text-center drop-td">';
+							$return .= '<div class="fa fa-trophy"></div>';
+						$return .= '</td>';
+						$return .= '<th class="election-result-header nowrap">Winner</th>';
+						$return .= '<td class="election-result-value">';
+							$return .= $by_election['elected_on_behalf_of'];
+							$return .= '<span class="divider">|</span>';
+							$return .= ($by_election['gain']) ? "Gain" : "Hold";
+						$return .= '</td>';
+					$return .= '</tr>';
+					$return .= '<tr>';
+						$return .= '<td class="election-result-icon text-center drop-td">';
+							$return .= '<div class="fa fa-users"></div>';
+						$return .= '</td>';
+						$return .= '<th class="election-result-header nowrap">Turnout</th>';
+						$return .= '<td class="election-result-value">' . $by_election['turnout_pct'] . '%</td>';
+					$return .= '</tr>';
+						$return .= '<td class="election-result-icon text-center drop-td">';
+							$return .= '<div class="fa fa-user"></div>';
+						$return .= '</td>';
+						$return .= '<th class="election-result-header nowrap">MP</th>';
+						$return .= '<td class="election-result-value">' . $by_election['elected_name'] . '</td>';
+					$return .= '</tr>';
+					$extra_info = citiznsdc_fetch_person_extra_info($by_election['dc_person_id']);
+					//echo dump($extra_info);
+					if (!empty($extra_info) and $extra_info['article_50_bill'] != null) {
+					$return .= '<tr>';
+						$return .= '<td class="election-result-icon text-center drop-td">';
+						$return .= '</td>';
+						$return .= '<th class="election-result-header nowrap">Voted</th>';
+						$return .= '<td class="election-result-value">' . (($extra_info['article_50_bill']) ? 'For' : 'Against') . ' the Article 50 bill</td>';
+					$return .= '</tr>';
+					}
 				$return .= '</tbody>';
-				$return .= '</table>';
+			$return .= '</table>';
+		}
+
+		$elections = $data['elections'];
+		if (!empty($elections)) {
+			foreach($elections as $election) {
+				if ($election['id'] == $last_election) {
+			$return .= '<h4>' . $election['name'] . ' Results</h4>';
+				}
+			}
+		
+			$candidates = $data['memberships'];
+			foreach($candidates as $candidate) {
+				if ($candidate['election']['id'] == $last_election and $candidate['elected']) {
+			$return .= '<table class="table">';
+				$return .= '<tbody>';
+					$return .= '<tr>';
+						$return .= '<td class="election-result-icon text-center drop-td">';
+							$return .= '<div class="fa fa-trophy"></div>';
+						$return .= '</td>';
+						$return .= '<th class="election-result-header nowrap">Winner</th>';
+						$return .= '<td class="election-result-value">' . $candidate['on_behalf_of']['name'] . '</td>';
+					$return .= '</tr>';
+					$return .= '<tr>';
+						$return .= '<td class="election-result-icon text-center drop-td">';
+							$return .= '<div class="fa fa-user"></div>';
+						$return .= '</td>';
+						$return .= '<th class="election-result-header nowrap">MP</th>';
+						$return .= '<td class="election-result-value">' . $candidate['person']['name'] . '</td>';
+					$return .= '</tr>';
+					$extra_info = citiznsdc_fetch_person_extra_info($candidate['person']['id']);
+					if (!empty($extra_info) and $extra_info['article_50_bill'] != null) {
+					$return .= '<tr>';
+						$return .= '<td class="election-result-icon text-center drop-td">';
+						$return .= '</td>';
+						$return .= '<th class="election-result-header nowrap">Voted</th>';
+						$return .= '<td class="election-result-value">' . (($extra_info['article_50_bill']) ? 'For' : 'Against') . ' the Article 50 bill</td>';
+					$return .= '</tr>';
+					}
+				$return .= '</tbody>';
+			$return .= '</table>';
+				}
 			}
 		}
-	}
 	
-	$eu_referendum = citiznsdc_fetch_eu_referendum($gss);
-	if (!empty($eu_referendum)) {
-		$return .= '<h4>2016 EU Referendum Results</h4>';
-		$return .= '<table class="table">';
-		$return .= '<tbody>';
-		$return .= '<tr>';
-		$return .= '<td class="election-result-icon text-center drop-td">';
-		$return .= '<div class="fa fa-check-square-o"></div>';
-		$return .= '</td>';
-		$return .= '<th class="election-result-header nowrap">Decision</th>';
-		if ($eu_referendum['leave_pct'] > $eu_referendum['remain_pct']) {
-				$return .= '<td class="election-result-value">Leave (' . $eu_referendum['leave_pct'] . '%)</td>';
-			} else {
-				$return .= '<td class="election-result-value">Remain (' . $eu_referendum['remain_pct'] . '%)</td>';
-			}
-		$return .= '</tr>';
-		$return .= '</tbody>';
-		$return .= '</table>';
-	}
+		$eu_referendum = citiznsdc_fetch_eu_referendum($gss);
+		if (!empty($eu_referendum)) {
+			$return .= '<h4>2016 EU Referendum Results</h4>';
+			$return .= '<table class="table">';
+				$return .= '<tbody>';
+					$return .= '<tr>';
+						$return .= '<td class="election-result-icon text-center drop-td">';
+							$return .= '<div class="fa fa-check-square-o"></div>';
+						$return .= '</td>';
+					$return .= '<th class="election-result-header nowrap">Decision</th>';
+					if ($eu_referendum['leave_pct'] > $eu_referendum['remain_pct']) {
+						$return .= '<td class="election-result-value">Leave (' . $eu_referendum['leave_pct'] . '%)</td>';
+					} else {
+						$return .= '<td class="election-result-value">Remain (' . $eu_referendum['remain_pct'] . '%)</td>';
+					}
+					$return .= '</tr>';
+				$return .= '</tbody>';
+			$return .= '</table>';
+		}
 
-	// media-body
-	$return .= '</div>';
+		// media-body
+		$return .= '</div>';
 	
 	// media
 	$return .= '</div>';
